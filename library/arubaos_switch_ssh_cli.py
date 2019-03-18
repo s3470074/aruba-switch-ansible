@@ -14,6 +14,10 @@ short_description: Executes CLI commands via SSH on ArubaOS-Switches
 
 description:
     - "Executes CLI commands via SSH on ArubaOS-Switches"
+    - "UPDATED 18/03/2019: Modified to add reboot of switch after successful firmware upload and added function to enable SNMPv3"
+
+author:
+    - Hamish Koelmeyer (@s3470074)
 
 '''
 
@@ -47,6 +51,14 @@ EXAMPLES = '''
         state: "downgrade" # pass "downgrade" to downgrade switch or "current" to stay at same version, default is "upgrade"
       register: module_result
 
+    - name: Initialise SNMPv3 on HP Aruba Switch and enable read only for SNMPv1 and SNMPv2
+      arubaos_switch_ssh_cli:
+        ip: "{{ ip }}"
+        user: "{{ user }}"
+        password: "{{ password }}"
+        enable_snmpv3: True # Used to run the code to enable SNMPv3 
+        snmpv3_authpwd: "Authentication Password for initial user"
+        snmpv3_privpwd: "Privacy PAssword for initail user"
     
 '''
 
@@ -107,6 +119,7 @@ class SwitchSSHCLI:
         """
         # Regex for ANSI escape chars, prompt and hostname command
         ansi_escape = re.compile(r'\x1B\[[0-?]*[ -/]*[@-~]')
+        # Modified from original to fix issue under Ansible 2.7.1 and Python 2.7.15
         prompt = re.compile(r'.*#')
         hostname = re.compile(r'^ho[^ ]*')
 
@@ -256,6 +269,34 @@ class SwitchSSHCLI:
                 break
             count += 1
 
+
+    def en_snmpv3(self, authpwd, privpwd):
+        """
+        Enable SNMPv3 on the switch 
+        :return:
+        """
+        self.in_channel('configure')
+	self.in_channel('snmpv3 enable')
+        count = 0
+        while count < 45:
+            time.sleep(2)
+            curr_text = self.out_channel()
+            if 'authentication password' in curr_text:
+                self.in_channel(authpwd)
+            elif 'privacy password' in curr_text:
+                self.in_channel(privpwd)
+            elif 'create a user that uses SHA' in curr_text:
+                self.in_channel("n")
+            elif 'snmpv3 restricted-access' in curr_text:
+                self.in_channel("y")
+                break
+            try:
+                self.in_channel("")
+            except socket.error:
+                break
+            count += 1
+
+
 def check_swi_version(result, module):
     """
     Find current SWi Version of Switch
@@ -263,7 +304,7 @@ def check_swi_version(result, module):
     :return: string of current version without ".swi" ending
     """
     # Init Vars
-    regex = u"YA\.[0-9]{2}\.[0-9]{2}\.[0-9]{4}"
+    regex = u"WC\.[0-9]{2}\.[0-9]{2}\.[0-9]{4}"
 
     # Find correct version
     matches = re.findall(regex, result)
@@ -403,6 +444,9 @@ def run_module():
         path_to_swi=dict(type='str', required=False, default=None),
         boot_image=dict(type='str', required=False, default='primary', choices=['primary', 'secondary']),
         enable_sftp=dict(type='bool', required=False, default=False),
+        enable_snmpv3=dict(type='bool', required=False, default=False),
+        snmpv3_authpwd=dict(type='str', required=False),
+        snmpv3_privpwd=dict(type='str', required=False),
         state=dict(type='str', required=False, default='upgrade', choices=['upgrade', 'downgrade', 'current'])
     )
 
@@ -439,6 +483,11 @@ def run_module():
 
         if module.params['show_command']:
             result['cli_output'] = class_init.execute_show_command(module.params['show_command'])
+
+        if module.params['enable_snmpv3']:
+            class_init.en_snmpv3(module.params['snmpv3_authpwd'],module.params['snmpv3_privpwd'])
+            result['changed'] = True
+        
     finally:
         class_init.logout()
 
