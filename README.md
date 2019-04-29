@@ -1,6 +1,8 @@
 # Ansible Aruba Switching Automation Workflow GitHub 
 Welcome to the Aruba Switching GitHub for automation with Ansible workflows.
-This repository provides different examples on how to use Ansible for automation of ArubaOS-Switch and ArubaOS-CX Switches. 
+This repository provides different examples on how to use Ansible for automation of ArubaOS-Switch and ArubaOS-CX Switches.
+
+\***Update: Python code in *arubaos_switch_ssh_cli.py* functionality improvements and new files to support firmware upgrade of 2530 family and 2540 family of switches. This code works with Ansible 2.7.1 and Python version 2.7.15. Created by Hamish Koelmeyer March 2019
 
 ## Preparation for automation server
 This project can be used on any Linux based system but we highly recommend CentOS in case of an automation server. 
